@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-worker
+spec:
+  replicas: 3  # scale workers independently for higher submission throughput
+  selector:
+    matchLabels:
+      app: execution-worker
+  template:
+    metadata:
+      labels:
+        app: execution-worker
+    spec:
+      containers:
+        - name: execution-worker
+          image: online-judge/execution-worker:latest
+          envFrom:
+            - secretRef:
+                name: judge-secrets
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock

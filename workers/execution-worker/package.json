@@ -1,0 +1,13 @@
+{
+  "name": "execution-worker",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "dependencies": {
+    "axios": "^1.18.0",
+    "dotenv": "^17.4.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.22.0"
+  }
+}

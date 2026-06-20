@@ -1,0 +1,17 @@
+{
+  "name": "plagiarism-service",
+  "version": "1.0.0",
+  "scripts": { "dev": "ts-node src/index.ts" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/pg": "^8.11.10",
+    "@types/node": "^22.15.21",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

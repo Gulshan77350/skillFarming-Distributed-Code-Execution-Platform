@@ -1,0 +1,1 @@
+export const kafkaBroker='kafka:9092';

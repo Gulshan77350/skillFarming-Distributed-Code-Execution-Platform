@@ -1,0 +1,61 @@
+Step 1 — Stop all Node.js processes
+
+pkill -f "node server.js" 2>/dev/null
+pkill -f "ts-node" 2>/dev/null
+pkill -f vite 2>/dev/null
+echo "All Node processes stopped"
+
+Step 2 — Verify ports are free
+
+sleep 2
+sudo lsof -i :3000,5001,5003,5004,5005,5006,5173 2>/dev/null
+
+
+If anything still shows up:
+
+sudo kill -9 <PID>
+
+
+Step 3 — Stop Docker containers
+
+
+cd ~/Downloads/distributed-code-execution-platform-main/infra/docker
+docker compose down
+Step 4 — Verify everything is clean
+
+docker ps
+sudo lsof -i :5432,6379,9092,2181
+
+Both should show no output / no running containers.
+
+✅ Restart Commands (Save This — Use Anytime)
+When you're ready to come back, run these in order, each in its own terminal:
+bash# Terminal 0 — Docker (Postgres, Redis, Kafka, Zookeeper)
+cd ~/Downloads/distributed-code-execution-platform-main/infra/docker
+docker compose up -d
+sleep 6
+bash# Terminal 1 — Gateway
+cd ~/Downloads/distributed-code-execution-platform-main/gateway
+node server.js
+bash# Terminal 2 — Auth Service
+cd ~/Downloads/distributed-code-execution-platform-main/services/auth-service
+npm run dev
+bash# Terminal 3 — Problem Service
+cd ~/Downloads/distributed-code-execution-platform-main/services/problem-service
+npm run dev
+bash# Terminal 4 — Submission Service
+cd ~/Downloads/distributed-code-execution-platform-main/services/submission-service
+npm run dev
+bash# Terminal 5 — Worker
+cd ~/Downloads/distributed-code-execution-platform-main/workers/execution-worker
+node worker.js
+bash# Terminal 6 — Leaderboard Service
+cd ~/Downloads/distributed-code-execution-platform-main/services/leaderboard-service
+npm run dev
+bash# Terminal 7 — Notification Service
+cd ~/Downloads/distributed-code-execution-platform-main/services/notification-service
+npm run dev
+bash# Terminal 8 — Frontend
+cd ~/Downloads/distributed-code-execution-platform-main/frontend
+npm run dev
+Then open http://localhost:5173/login.
