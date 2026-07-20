@@ -28,6 +28,7 @@ export default function Leaderboard() {
           <Link to="/dashboard" className="font-bold text-lg text-blue-400">⚡ skillFarming</Link>
           <Link to="/problems" className="text-gray-300 hover:text-white text-sm transition">Problems</Link>
           <span className="text-white text-sm font-medium">Leaderboard</span>
+          <Link to="/analytics" className="text-gray-300 hover:text-white text-sm transition">Analytics</Link>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-gray-300 text-sm">Hey, <span className="text-white font-medium">{user?.username}</span></span>

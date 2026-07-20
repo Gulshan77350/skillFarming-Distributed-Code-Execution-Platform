@@ -14,10 +14,43 @@ interface Problem {
   test_cases: TestCase[];
 }
 
-const DEFAULT_CODE = `# Read input, write your solution, print the result
+const TEMPLATES: Record<string, string> = {
+  python: `# Read input, write your solution, print the result
 a, b = map(int, input().split())
 print(a + b)
-`;
+`,
+  javascript: `// Read input, write your solution, print the result
+const fs = require('fs');
+const input = fs.readFileSync(0, 'utf-8').trim();
+const [a, b] = input.split(' ').map(Number);
+console.log(a + b);
+`,
+  c: `// Read input, write your solution, print the result
+#include <stdio.h>
+
+int main() {
+    int a, b;
+    if (scanf("%d %d", &a, &b) == 2) {
+        printf("%d\\n", a + b);
+    }
+    return 0;
+}
+`,
+  cpp: `// Read input, write your solution, print the result
+#include <iostream>
+using namespace std;
+
+int main() {
+    int a, b;
+    if (cin >> a >> b) {
+        cout << a + b << endl;
+    }
+    return 0;
+}
+`
+};
+
+const DEFAULT_CODE = TEMPLATES.python;
 
 const statusStyles: Record<string, string> = {
   QUEUED:         'text-gray-400 bg-gray-800',
@@ -34,6 +67,7 @@ export default function ProblemDetail() {
   const { user, logout } = useAuth();
 
   const [problem, setProblem]       = useState<Problem | null>(null);
+  const [language, setLanguage]     = useState('python');
   const [code, setCode]             = useState(DEFAULT_CODE);
   const [submitting, setSubmitting] = useState(false);
   const [verdict, setVerdict]       = useState<{ status: string; output: string } | null>(null);
@@ -81,7 +115,7 @@ export default function ProblemDetail() {
       const { data } = await client.post('/submissions', {
         user_id: user.id,
         problem_id: problem.id,
-        language: 'python',
+        language,
         code,
       });
 
@@ -163,10 +197,27 @@ export default function ProblemDetail() {
         </div>
 
         <div className="flex flex-col">
+          <div className="flex bg-gray-900 border-b border-gray-800 px-4 py-2 justify-between items-center">
+            <span className="text-sm font-semibold text-gray-400">Language:</span>
+            <select
+              value={language}
+              onChange={(e) => {
+                const lang = e.target.value;
+                setLanguage(lang);
+                setCode(TEMPLATES[lang] || '');
+              }}
+              className="bg-gray-800 text-white border border-gray-700 rounded px-2 py-1 text-xs outline-none cursor-pointer"
+            >
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="c">C (GCC)</option>
+              <option value="cpp">C++ (G++)</option>
+            </select>
+          </div>
           <div className="flex-1">
             <Editor
               height="100%"
-              language="python"
+              language={language}
               theme="vs-dark"
               value={code}
               onChange={(val) => setCode(val || '')}

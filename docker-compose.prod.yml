@@ -1,0 +1,190 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: judgeuser
+      POSTGRES_PASSWORD: judgepass
+      POSTGRES_DB: onlinejudge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    restart: always
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    restart: always
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: always
+    ports:
+      - "9100:9100"
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/auth-service/.env
+    depends_on:
+      - postgres
+      - kafka
+
+  problem-service:
+    build:
+      context: ./services/problem-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/problem-service/.env
+    depends_on:
+      - postgres
+
+  submission-service:
+    build:
+      context: ./services/submission-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/submission-service/.env
+    depends_on:
+      - postgres
+      - kafka
+
+  leaderboard-service:
+    build:
+      context: ./services/leaderboard-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/leaderboard-service/.env
+    depends_on:
+      - redis
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/notification-service/.env
+    depends_on:
+      - redis
+      - kafka
+
+  plagiarism-service:
+    build:
+      context: ./services/plagiarism-service
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./services/plagiarism-service/.env
+    depends_on:
+      - postgres
+
+  execution-worker:
+    build:
+      context: ./workers/execution-worker
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./workers/execution-worker/.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    env_file:
+      - ./gateway/.env
+    depends_on:
+      - redis
+      - auth-service
+      - problem-service
+      - submission-service
+      - leaderboard-service
+      - notification-service
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    network_mode: host
+    depends_on:
+      - gateway
+
+volumes:
+  postgres_data:

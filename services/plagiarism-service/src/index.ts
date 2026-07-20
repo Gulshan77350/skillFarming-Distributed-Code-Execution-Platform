@@ -14,7 +14,7 @@ const pool = new Pool({
 });
 
 // Normalize code: strip comments, collapse whitespace, lowercase
-function normalize(code: string): string {
+export function normalize(code: string): string {
   return code
     .replace(/#.*$/gm, '')          // strip Python comments
     .replace(/\s+/g, ' ')           // collapse whitespace
@@ -23,7 +23,7 @@ function normalize(code: string): string {
 }
 
 // Generate k-grams (sequences of k tokens) for similarity comparison
-function kGrams(text: string, k = 5): Set<string> {
+export function kGrams(text: string, k = 5): Set<string> {
   const tokens = text.split(' ').filter(Boolean);
   const grams = new Set<string>();
   for (let i = 0; i <= tokens.length - k; i++) {
@@ -33,7 +33,7 @@ function kGrams(text: string, k = 5): Set<string> {
 }
 
 // Jaccard similarity: |intersection| / |union|
-function similarity(a: Set<string>, b: Set<string>): number {
+export function similarity(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let intersection = 0;
   for (const gram of a) if (b.has(gram)) intersection++;
@@ -81,4 +81,6 @@ app.post('/check/:submission_id', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(5007, () => console.log('Plagiarism service on port 5007'));
+if (require.main === module) {
+  app.listen(5007, () => console.log('Plagiarism service on port 5007'));
+}

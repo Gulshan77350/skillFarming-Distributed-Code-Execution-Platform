@@ -6,6 +6,7 @@ import Dashboard       from './pages/Dashboard';
 import Problems        from './pages/Problems';
 import ProblemDetail   from './pages/ProblemDetail';
 import Leaderboard     from './pages/Leaderboard';
+import Analytics       from './pages/Analytics';
 
 function PrivateRoute({ children }: { children: React.JSX.Element }) {
   const { token } = useAuth();
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/problems"     element={<PrivateRoute><Problems /></PrivateRoute>} />
           <Route path="/problems/:id" element={<PrivateRoute><ProblemDetail /></PrivateRoute>} />
           <Route path="/leaderboard"  element={<PrivateRoute><Leaderboard /></PrivateRoute>} />
+          <Route path="/analytics"    element={<PrivateRoute><Analytics /></PrivateRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

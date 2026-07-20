@@ -26,16 +26,14 @@ app.post('/award', async (req: Request, res: Response) => {
   const { user_id, problem_id, difficulty } = req.body;
   if (!user_id || !problem_id) return res.status(400).json({ error: 'user_id and problem_id required' });
 
-  // Avoid double-counting: only award if this is the user's first ACCEPTED submission for this problem
-  const alreadySolved = await redis.sIsMember(`solved:${user_id}`, String(problem_id));
-  if (alreadySolved) {
+  // Avoid double-counting: SADD is atomic and returns 1 if newly added, 0 if already existed.
+  const addedCount = await redis.sAdd(`solved:${user_id}`, String(problem_id));
+  if (addedCount === 0) {
     return res.json({ awarded: false, reason: 'Already solved' });
   }
 
   const points = difficulty === 'hard' ? 50 : difficulty === 'medium' ? 30 : 10;
-
   await redis.zIncrBy(LEADERBOARD_KEY, points, String(user_id));
-  await redis.sAdd(`solved:${user_id}`, String(problem_id));
 
   return res.json({ awarded: true, points });
 });

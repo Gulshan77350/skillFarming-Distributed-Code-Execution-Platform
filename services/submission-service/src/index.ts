@@ -25,7 +25,7 @@ app.post('/submit', async (req: Request, res: Response) => {
   if (!user_id || !problem_id || !language || !code)
     return res.status(400).json({ error: 'All fields required' });
 
-  const allowed = ['python'];
+  const allowed = ['python', 'javascript', 'c', 'cpp', 'c++'];
   if (!allowed.includes(language))
     return res.status(400).json({ error: `Language must be one of: ${allowed.join(', ')}` });
 
@@ -90,6 +90,152 @@ app.get('/stats/:user_id', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// NEW: detailed user performance analytics for charts & dashboard
+app.get('/stats/user-analytics/:user_id', async (req: Request, res: Response) => {
+  const userId = req.params.user_id;
+  const period = req.query.period || 'weekly'; // weekly, monthly, all
+
+  let intervalDays = 7;
+  if (period === 'monthly') intervalDays = 30;
+  else if (period === 'all') intervalDays = 365;
+
+  try {
+    // 1. Overall Metrics
+    const overallResult = await pool.query(`
+      SELECT 
+        COUNT(id)::int AS total_submissions,
+        COUNT(CASE WHEN status = 'ACCEPTED' THEN 1 END)::int AS accepted_submissions,
+        COUNT(DISTINCT CASE WHEN status = 'ACCEPTED' THEN problem_id END)::int AS solved_count,
+        ROUND(
+          COALESCE(
+            (COUNT(CASE WHEN status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(id), 0)) * 100,
+            0
+          ),
+          1
+        )::float AS overall_accuracy
+      FROM submissions
+      WHERE user_id = $1
+    `, [userId]);
+    const overall = overallResult.rows[0] || { total_submissions: 0, accepted_submissions: 0, solved_count: 0, overall_accuracy: 0 };
+
+    // 2. Verdict Breakdown
+    const verdictResult = await pool.query(`
+      SELECT status, COUNT(id)::int AS count
+      FROM submissions
+      WHERE user_id = $1
+      GROUP BY status
+    `, [userId]);
+    const verdicts = verdictResult.rows;
+
+    // 3. Difficulty Breakdown
+    const difficultyResult = await pool.query(`
+      SELECT 
+        p.difficulty,
+        COUNT(s.id)::int AS total_submissions,
+        COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::int AS accepted_submissions,
+        ROUND(
+          COALESCE(
+            (COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(s.id), 0)) * 100, 
+            0
+          ), 
+          1
+        )::float AS accuracy
+      FROM problems p
+      JOIN submissions s ON p.id = s.problem_id
+      WHERE s.user_id = $1
+      GROUP BY p.difficulty
+    `, [userId]);
+    
+    // Default structure for difficulty stats
+    const difficultyStats: Record<string, any> = {
+      easy: { total_submissions: 0, accepted_submissions: 0, accuracy: 0 },
+      medium: { total_submissions: 0, accepted_submissions: 0, accuracy: 0 },
+      hard: { total_submissions: 0, accepted_submissions: 0, accuracy: 0 }
+    };
+    difficultyResult.rows.forEach(row => {
+      if (difficultyStats[row.difficulty]) {
+        difficultyStats[row.difficulty] = {
+          total_submissions: row.total_submissions,
+          accepted_submissions: row.accepted_submissions,
+          accuracy: row.accuracy
+        };
+      }
+    });
+
+    // 4. Time Series Timeline (aggregated daily)
+    const timeSeriesResult = await pool.query(`
+      SELECT 
+        DATE_TRUNC('day', created_at)::date AS raw_date,
+        COUNT(id)::int AS total,
+        COUNT(CASE WHEN status = 'ACCEPTED' THEN 1 END)::int AS accepted,
+        COUNT(CASE WHEN status != 'ACCEPTED' AND status != 'QUEUED' THEN 1 END)::int AS failed
+      FROM submissions
+      WHERE user_id = $1 AND created_at >= NOW() - CAST($2 || ' days' AS INTERVAL)
+      GROUP BY raw_date
+      ORDER BY raw_date ASC
+    `, [userId, intervalDays]);
+
+    // Fill in empty dates for a smoother timeline graph
+    const timelineMap = new Map();
+    timeSeriesResult.rows.forEach(row => {
+      // Format to YYYY-MM-DD
+      const dateStr = new Date(row.raw_date).toISOString().split('T')[0];
+      timelineMap.set(dateStr, { total: row.total, accepted: row.accepted, failed: row.failed });
+    });
+
+    const timeline = [];
+    for (let i = intervalDays - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const data = timelineMap.get(dateStr) || { total: 0, accepted: 0, failed: 0 };
+      
+      // Visual date format (e.g. "Jul 20")
+      const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      timeline.push({ date: label, dateFull: dateStr, ...data });
+    }
+
+    // 5. Weak Area Detection
+    // We analyze the difficulty accuracy rates. The difficulty with lowest accuracy (and non-zero submissions) is the weak area.
+    let weakArea = 'None';
+    let minAccuracy = 101;
+    let recommendation = 'Keep solving diverse problems!';
+
+    Object.keys(difficultyStats).forEach(diff => {
+      const stats = difficultyStats[diff];
+      if (stats.total_submissions > 0 && stats.accuracy < minAccuracy && stats.accuracy < 80) {
+        minAccuracy = stats.accuracy;
+        weakArea = diff;
+      }
+    });
+
+    if (weakArea === 'hard') {
+      recommendation = 'Focus on breaking down hard problems into smaller components and dry-running core logic.';
+    } else if (weakArea === 'medium') {
+      recommendation = 'Practice medium-difficulty algorithm designs. Focus on optimizations (e.g., hash maps, dynamic programming).';
+    } else if (weakArea === 'easy') {
+      recommendation = 'Go back to basics. Revise simple arrays, logic conditions, and time complexity parameters.';
+    } else if (overall.total_submissions === 0) {
+      recommendation = 'Submit your first solution to see performance insights!';
+    }
+
+    return res.json({
+      overall,
+      verdicts,
+      difficultyBreakdown: difficultyStats,
+      timeline,
+      weakArea: {
+        topic: weakArea,
+        accuracy: minAccuracy === 101 ? 100 : minAccuracy,
+        recommendation
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to fetch user analytics' });
   }
 });
 

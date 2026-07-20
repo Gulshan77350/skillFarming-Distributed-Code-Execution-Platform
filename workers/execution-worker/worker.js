@@ -1,11 +1,15 @@
 require('dotenv').config();
 
 const { Kafka } = require('kafkajs');
-const { exec }  = require('child_process');
+const { spawn } = require('child_process');
 const fs        = require('fs');
 const path      = require('path');
 const { Pool }  = require('pg');
 const axios     = require('axios');
+const { createClient } = require('redis');
+
+const redisPub = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
+redisPub.connect().then(() => console.log('Redis publisher connected')).catch(err => console.error('Redis connection failed:', err.message));
 
 const kafka     = new Kafka({ clientId: 'execution-worker', brokers: [process.env.KAFKA_BROKER] });
 const consumer  = kafka.consumer({ groupId: 'judge-group' });
@@ -17,23 +21,66 @@ const pool = new Pool({
   port: Number(process.env.DB_PORT),
 });
 
-function runInDocker(filename, input) {
-  return new Promise((resolve) => {
-    const cmd = `echo "${input.replace(/"/g, '\\"')}" | docker run --rm -i --network none --memory 128m --cpus 0.5 \
-      -v ${filename}:/app/code.py python:3.11-slim \
-      timeout 5 python /app/code.py`;
+function getLangConfig(language) {
+  switch (language) {
+    case 'javascript':
+    case 'js':
+      return { ext: 'js', image: 'node:20-slim', cmd: ['timeout', '5', 'node', '/app/code.js'] };
+    case 'c':
+      return { ext: 'c', image: 'gcc:latest', cmd: ['sh', '-c', 'gcc /app/code.c -o /tmp/prog && timeout 5 /tmp/prog'] };
+    case 'cpp':
+    case 'c++':
+      return { ext: 'cpp', image: 'gcc:latest', cmd: ['sh', '-c', 'g++ -O2 /app/code.cpp -o /tmp/prog && timeout 5 /tmp/prog'] };
+    case 'python':
+    default:
+      return { ext: 'py', image: 'python:3.11-slim', cmd: ['timeout', '5', 'python', '/app/code.py'] };
+  }
+}
 
-    exec(cmd, { timeout: 8000 }, (error, stdout, stderr) => {
-      resolve({ output: stdout.trim(), error: error ? (stderr.trim() || error.message) : null });
+function runInDocker(filename, input, language) {
+  const config = getLangConfig(language);
+
+  return new Promise((resolve) => {
+    const dockerProcess = spawn('docker', [
+      'run', '--rm', '-i',
+      '--network', 'none',
+      '--memory', '128m',
+      '--cpus', '0.5',
+      '-v', `${filename}:/app/code.${config.ext}`,
+      config.image,
+      ...config.cmd
+    ], { timeout: 10000 });
+
+    let stdout = '';
+    let stderr = '';
+
+    dockerProcess.stdout.on('data', (data) => { stdout += data; });
+    dockerProcess.stderr.on('data', (data) => { stderr += data; });
+
+    dockerProcess.on('error', (err) => {
+      resolve({ output: '', error: err.message });
     });
+
+    dockerProcess.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ output: stdout.trim(), error: stderr.trim() || `Exit code ${code}` });
+      } else {
+        resolve({ output: stdout.trim(), error: null });
+      }
+    });
+
+    if (input) {
+      dockerProcess.stdin.write(input);
+    }
+    dockerProcess.stdin.end();
   });
 }
 
 async function pushToUser(userId, payload) {
   try {
-    await axios.post(`http://localhost:3000/internal/push/${userId}`, payload);
+    await redisPub.publish('ws-push', JSON.stringify({ userId, payload }));
   } catch (err) {
-    console.error('WS push failed (gateway may be down):', err.message);
+    console.error('Redis Pub/Sub push failed:', err.message);
   }
 }
 
@@ -46,9 +93,10 @@ async function run() {
   await consumer.run({
     eachMessage: async ({ message }) => {
       const submission = JSON.parse(message.value.toString());
-      console.log('Processing submission:', submission.id);
+      console.log('Processing submission:', submission.id, 'language:', submission.language);
 
-      const filename = path.join('/tmp', `code-${submission.id}.py`);
+      const config = getLangConfig(submission.language);
+      const filename = path.join('/tmp', `code-${submission.id}.${config.ext}`);
       fs.writeFileSync(filename, submission.code, { mode: 0o600 });
 
       try {
@@ -71,7 +119,7 @@ async function run() {
           let passed = 0, failOutput = '', runtimeError = null;
 
           for (const tc of testCases) {
-            const result = await runInDocker(filename, tc.input);
+            const result = await runInDocker(filename, tc.input, submission.language);
             if (result.error) { runtimeError = result.error; break; }
             if (result.output.trim() === tc.expected.trim()) passed++;
             else { failOutput = `Input: ${tc.input}\nExpected: ${tc.expected}\nGot: ${result.output}`; break; }

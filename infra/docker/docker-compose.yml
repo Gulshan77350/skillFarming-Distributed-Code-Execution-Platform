@@ -50,6 +50,22 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis_exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana

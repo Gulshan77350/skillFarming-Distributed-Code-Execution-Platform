@@ -7,6 +7,7 @@ const jwt     = require('jsonwebtoken');
 const http    = require('http');
 const WebSocket = require('ws');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const { createClient } = require('redis');
 
 const app = express();
 
@@ -69,19 +70,41 @@ app.get('/', (_req, res) => {
 // ─── WebSocket push (internal, used by worker) — MUST be registered before proxies/404 ───
 const clients = new Map();
 
-app.post('/internal/push/:user_id', express.json(), (req, res) => {
-  const userId = Number(req.params.user_id);
-  const sockets = clients.get(userId);
-  let delivered = 0;
-  if (sockets) {
-    for (const ws of sockets) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(req.body));
-        delivered++;
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisSub = createClient({ url: redisUrl });
+const redisPub = createClient({ url: redisUrl });
+
+async function initRedis() {
+  await redisSub.connect();
+  await redisPub.connect();
+  console.log('Redis Pub/Sub connected for Gateway');
+
+  await redisSub.subscribe('ws-push', (message) => {
+    try {
+      const { userId, payload } = JSON.parse(message);
+      const sockets = clients.get(Number(userId));
+      if (sockets) {
+        for (const ws of sockets) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(payload));
+          }
+        }
       }
+    } catch (err) {
+      console.error('Error handling Redis Pub/Sub message:', err.message);
     }
+  });
+}
+initRedis().catch(err => console.error('Redis subscription failed:', err.message));
+
+app.post('/internal/push/:user_id', express.json(), async (req, res) => {
+  const userId = Number(req.params.user_id);
+  try {
+    await redisPub.publish('ws-push', JSON.stringify({ userId, payload: req.body }));
+    res.json({ status: 'published' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to publish message: ' + err.message });
   }
-  res.json({ delivered });
 });
 
 app.use('/auth', createProxyMiddleware({

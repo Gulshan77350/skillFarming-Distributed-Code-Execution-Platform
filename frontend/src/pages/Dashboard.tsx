@@ -40,6 +40,9 @@ export default function Dashboard() {
           <Link to="/leaderboard" className="text-gray-300 hover:text-white text-sm transition">
             Leaderboard
           </Link>
+          <Link to="/analytics" className="text-gray-300 hover:text-white text-sm transition">
+            Analytics
+          </Link>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-gray-300 text-sm">
@@ -92,7 +95,7 @@ export default function Dashboard() {
         <div className="bg-blue-900/20 border border-blue-700 rounded-xl p-6">
           <h3 className="font-semibold text-blue-300 mb-2">🚀 Start Solving</h3>
           <p className="text-gray-400 text-sm mb-4">
-            Browse problems and submit your solutions. The judge will run your code in a sandboxed Docker container.
+            Browse problems and submit your solutions.
           </p>
           <Link to="/problems"
             className="inline-block bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2 rounded-lg transition">

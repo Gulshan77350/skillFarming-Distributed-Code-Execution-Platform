@@ -18,12 +18,36 @@ const pool = new Pool({
 // Health
 app.get('/', (_req, res) => res.json({ service: 'Problem Service', status: 'ok' }));
 
-// Get all problems
+// Get all problems with stats (total submissions, success rate, error rate)
 app.get('/problems', async (_req: Request, res: Response) => {
   try {
-    const result = await pool.query(
-      'SELECT id, title, difficulty, created_at FROM problems ORDER BY id'
-    );
+    const result = await pool.query(`
+      SELECT 
+        p.id, 
+        p.title, 
+        p.difficulty, 
+        p.created_at,
+        COUNT(s.id)::int AS total_submissions,
+        COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::int AS accepted_submissions,
+        ROUND(
+          COALESCE(
+            (COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(s.id), 0)) * 100, 
+            0
+          ), 
+          1
+        )::float AS success_rate,
+        ROUND(
+          100 - COALESCE(
+            (COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(s.id), 0)) * 100, 
+            0
+          ), 
+          1
+        )::float AS error_rate
+      FROM problems p
+      LEFT JOIN submissions s ON p.id = s.problem_id
+      GROUP BY p.id
+      ORDER BY p.id
+    `);
     return res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -31,12 +55,33 @@ app.get('/problems', async (_req: Request, res: Response) => {
   }
 });
 
-// Get single problem with test cases
+// Get single problem with test cases and stats
 app.get('/problems/:id', async (req: Request, res: Response) => {
   try {
-    const problem = await pool.query(
-      'SELECT * FROM problems WHERE id = $1', [req.params.id]
-    );
+    const problem = await pool.query(`
+      SELECT 
+        p.*,
+        COUNT(s.id)::int AS total_submissions,
+        COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::int AS accepted_submissions,
+        ROUND(
+          COALESCE(
+            (COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(s.id), 0)) * 100, 
+            0
+          ), 
+          1
+        )::float AS success_rate,
+        ROUND(
+          100 - COALESCE(
+            (COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::numeric / NULLIF(COUNT(s.id), 0)) * 100, 
+            0
+          ), 
+          1
+        )::float AS error_rate
+      FROM problems p
+      LEFT JOIN submissions s ON p.id = s.problem_id
+      WHERE p.id = $1
+      GROUP BY p.id
+    `, [req.params.id]);
     if (!problem.rows.length)
       return res.status(404).json({ error: 'Problem not found' });
 
