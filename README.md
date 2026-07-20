@@ -22,7 +22,7 @@ A high-performance, production-ready Distributed Code Judge and Execution Platfo
        [ React Frontend ] ──(WebSocket)── [ Redis Pub/Sub (ws-push) ]
               │                                      ▲
               ▼                                      │
-       [ Nginx API Gateway ]                         │
+       [ Express API Gateway ]                       │
               │                                      │
      ┌────────┼────────┬─────────────────┐           │
      ▼        ▼        ▼                 ▼           │
@@ -38,7 +38,7 @@ A high-performance, production-ready Distributed Code Judge and Execution Platfo
                        │
                        ▼
               [ Ephemeral Docker Sandbox ]
-              (python:3.11-slim / node:20-slim)
+              (python:3.11-slim / node:20-slim / gcc:latest)
 ```
 
 ---
@@ -48,7 +48,7 @@ A high-performance, production-ready Distributed Code Judge and Execution Platfo
 | Tier | Technologies |
 |---|---|
 | **Frontend** | React, Vite, Tailwind CSS, Monaco Editor, Recharts |
-| **Gateway** | Nginx, Express Gateway Proxy |
+| **Gateway** | Express.js API Gateway, HTTP Proxy Middleware |
 | **Backing Services** | Node.js, TypeScript, Express |
 | **Databases & Cache** | PostgreSQL, Redis (Caching & WebSockets) |
 | **Message Broker** | Apache Kafka, ZooKeeper |
@@ -62,7 +62,7 @@ A high-performance, production-ready Distributed Code Judge and Execution Platfo
 ```text
 .
 ├── frontend/                     # React dashboard with Monaco Editor & Recharts
-├── gateway/                      # Nginx Gateway Routing Proxy
+├── gateway/                      # Express API Gateway Proxy & WebSocket router
 ├── services/                     
 │   ├── auth-service/             # JWT Registration, Login, and Session management
 │   ├── problem-service/          # Problem directory, descriptions, and test case storage
@@ -75,7 +75,7 @@ A high-performance, production-ready Distributed Code Judge and Execution Platfo
 ├── infra/                        
 │   ├── docker/                   # Postgres DB init schema scripts
 │   └── monitoring/               # Prometheus & Grafana scrape configs
-└── k8s/                          # Production Kubernetes manifests
+└── k8s/                          # Production Kubernetes deployment & HPA manifests
 ```
 
 ---
@@ -86,7 +86,7 @@ Ensure you have **Docker** and **Docker Compose** installed on your host system.
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/skillFarming-Distributed-Code-Execution-Platform.git
+   git clone https://github.com/Gulshan77350/skillFarming-Distributed-Code-Execution-Platform.git
    cd skillFarming-Distributed-Code-Execution-Platform
    ```
 
