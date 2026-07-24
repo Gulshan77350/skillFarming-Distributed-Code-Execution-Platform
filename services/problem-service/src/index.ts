@@ -26,6 +26,7 @@ app.get('/problems', async (_req: Request, res: Response) => {
         p.id, 
         p.title, 
         p.difficulty, 
+        p.topic,
         p.created_at,
         COUNT(s.id)::int AS total_submissions,
         COUNT(CASE WHEN s.status = 'ACCEPTED' THEN 1 END)::int AS accepted_submissions,
@@ -52,6 +53,17 @@ app.get('/problems', async (_req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to fetch problems' });
+  }
+});
+
+// Get random problem ID
+app.get('/problems/random', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT id FROM problems ORDER BY RANDOM() LIMIT 1');
+    if (!result.rows.length) return res.status(404).json({ error: 'No problems found' });
+    return res.json({ id: result.rows[0].id });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch random problem' });
   }
 });
 
@@ -123,6 +135,62 @@ app.post('/problems', async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to create problem' });
+  }
+});
+
+// Start a virtual contest
+app.post('/contests/start', async (req: Request, res: Response) => {
+  const { user_id } = req.body;
+  if (!user_id) return res.status(400).json({ error: 'user_id required' });
+  try {
+    await pool.query('UPDATE contest_sessions SET end_time = NOW() WHERE user_id = $1 AND end_time > NOW()', [user_id]);
+    const easy = await pool.query("SELECT id FROM problems WHERE difficulty = 'easy' ORDER BY RANDOM() LIMIT 1");
+    const medHard = await pool.query("SELECT id FROM problems WHERE difficulty IN ('medium', 'hard') ORDER BY RANDOM() LIMIT 1");
+
+    if (!easy.rows.length || !medHard.rows.length) return res.status(500).json({ error: 'Not enough problems for a contest' });
+
+    const result = await pool.query(
+      `INSERT INTO contest_sessions (user_id, end_time, problem_easy_id, problem_hard_id) 
+       VALUES ($1, NOW() + INTERVAL '1 hour', $2, $3) RETURNING *`,
+      [user_id, easy.rows[0].id, medHard.rows[0].id]
+    );
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to start contest' });
+  }
+});
+
+// Get active contest
+app.get('/contests/active/:user_id', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM contest_sessions WHERE user_id = $1 AND end_time > NOW() ORDER BY start_time DESC LIMIT 1',
+      [req.params.user_id]
+    );
+    if (!result.rows.length) return res.json(null);
+    const contest = result.rows[0];
+
+    const submissions = await pool.query(
+      `SELECT problem_id FROM submissions 
+       WHERE user_id = $1 AND status = 'ACCEPTED' AND created_at >= $2 AND created_at <= $3`,
+      [req.params.user_id, contest.start_time, contest.end_time]
+    );
+    
+    let score = 0; let easySolved = false; let hardSolved = false;
+    submissions.rows.forEach(s => {
+      if (s.problem_id === contest.problem_easy_id) easySolved = true;
+      if (s.problem_id === contest.problem_hard_id) hardSolved = true;
+    });
+
+    if (easySolved) score += 100;
+    if (hardSolved) score += 300;
+
+    await pool.query('UPDATE contest_sessions SET score = $1 WHERE id = $2', [score, contest.id]);
+    return res.json({ ...contest, score, easySolved, hardSolved });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to fetch active contest' });
   }
 });
 

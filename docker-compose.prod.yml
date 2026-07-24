@@ -147,12 +147,12 @@ services:
 
   execution-worker:
     build:
-      context: ./workers/execution-worker
+      context: ./services/execution-worker
       dockerfile: Dockerfile
     restart: always
     network_mode: host
     env_file:
-      - ./workers/execution-worker/.env
+      - ./services/execution-worker/.env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp

@@ -10,14 +10,17 @@ export default function Leaderboard() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [type, setType] = useState<'global' | 'contest'>('global');
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
   useEffect(() => {
-    client.get('/leaderboard?limit=20')
+    setLoading(true);
+    const endpoint = type === 'global' ? '/leaderboard?limit=20' : '/contests/leaderboard?limit=20';
+    client.get(endpoint)
       .then(r => setEntries(r.data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [type]);
 
   const medal = (rank: number) => rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
 
@@ -37,8 +40,26 @@ export default function Leaderboard() {
       </nav>
 
       <main className="max-w-3xl mx-auto px-6 py-10">
-        <h2 className="text-3xl font-bold mb-2">🏆 Leaderboard</h2>
-        <p className="text-gray-400 mb-8">Top performers ranked by points earned from accepted solutions.</p>
+        <div className="flex justify-between items-end mb-8">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">🏆 Leaderboard</h2>
+            <p className="text-gray-400 text-sm">
+              {type === 'global' ? 'Top performers ranked by points earned from accepted solutions.' : 'Top performers ranked by their highest Virtual Contest score.'}
+            </p>
+          </div>
+          <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-700">
+            <button 
+              onClick={() => setType('global')}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition ${type === 'global' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+              Global
+            </button>
+            <button 
+              onClick={() => setType('contest')}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition ${type === 'contest' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+              Virtual Contests
+            </button>
+          </div>
+        </div>
 
         {loading && <div className="text-gray-400 text-center py-20">Loading rankings...</div>}
 

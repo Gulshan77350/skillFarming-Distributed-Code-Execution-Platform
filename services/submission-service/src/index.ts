@@ -21,7 +21,7 @@ producer.connect().then(() => console.log('Kafka producer connected'));
 app.get('/', (_req, res) => res.json({ service: 'Submission Service', status: 'ok' }));
 
 app.post('/submit', async (req: Request, res: Response) => {
-  const { user_id, problem_id, language, code } = req.body;
+  const { user_id, problem_id, language, code, scheduled_at } = req.body;
   if (!user_id || !problem_id || !language || !code)
     return res.status(400).json({ error: 'All fields required' });
 
@@ -29,14 +29,30 @@ app.post('/submit', async (req: Request, res: Response) => {
   if (!allowed.includes(language))
     return res.status(400).json({ error: `Language must be one of: ${allowed.join(', ')}` });
 
+  let initialStatus = 'QUEUED';
+  let scheduledAtDate: Date | null = null;
+  
+  if (scheduled_at) {
+    scheduledAtDate = new Date(scheduled_at);
+    if (!isNaN(scheduledAtDate.getTime()) && scheduledAtDate > new Date()) {
+      initialStatus = 'SCHEDULED';
+    } else {
+      scheduledAtDate = null;
+    }
+  }
+
   try {
     const result = await pool.query(
-      `INSERT INTO submissions (user_id,problem_id,language,code,status)
-       VALUES($1,$2,$3,$4,'QUEUED') RETURNING *`,
-      [user_id, problem_id, language, code]
+      `INSERT INTO submissions (user_id,problem_id,language,code,status,scheduled_at)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [user_id, problem_id, language, code, initialStatus, scheduledAtDate]
     );
     const submission = result.rows[0];
-    await producer.send({ topic: 'submission-created', messages: [{ value: JSON.stringify(submission) }] });
+    
+    if (initialStatus === 'QUEUED') {
+      await producer.send({ topic: 'submission-created', messages: [{ value: JSON.stringify(submission) }] });
+    }
+    
     return res.status(201).json(submission);
   } catch (err) {
     console.error(err);
@@ -63,6 +79,24 @@ app.get('/submit/history/:user_id/:problem_id', async (req: Request, res: Respon
     const result = await pool.query(
       'SELECT id, status, created_at FROM submissions WHERE user_id=$1 AND problem_id=$2 ORDER BY created_at DESC LIMIT 10',
       [req.params.user_id, req.params.problem_id]
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Fetch failed' });
+  }
+});
+
+// NEW: Fetch recent submissions across all problems for a user
+app.get('/submit/recent/:user_id', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.id, s.status, s.language, s.created_at, p.title as problem_title, p.id as problem_id
+       FROM submissions s
+       JOIN problems p ON s.problem_id = p.id
+       WHERE s.user_id = $1
+       ORDER BY s.created_at DESC LIMIT 5`,
+      [req.params.user_id]
     );
     return res.json(result.rows);
   } catch (err) {
@@ -238,5 +272,42 @@ app.get('/stats/user-analytics/:user_id', async (req: Request, res: Response) =>
     return res.status(500).json({ error: 'Failed to fetch user analytics' });
   }
 });
+
+// Background worker for scheduled submissions
+setInterval(async () => {
+  try {
+    const result = await pool.query(`
+      UPDATE submissions
+      SET status = 'QUEUED'
+      FROM problems
+      WHERE submissions.problem_id = problems.id 
+        AND submissions.status = 'SCHEDULED' 
+        AND submissions.scheduled_at <= NOW()
+      RETURNING submissions.*, problems.title as problem_title
+    `);
+
+    for (const submission of result.rows) {
+      // 1. Dispatch to executor
+      await producer.send({ topic: 'submission-created', messages: [{ value: JSON.stringify(submission) }] });
+      
+      // 2. Dispatch notification that it started
+      await producer.send({
+        topic: 'submission-verdict',
+        messages: [{
+          value: JSON.stringify({
+            user_id: submission.user_id,
+            problem_id: submission.problem_id,
+            problem_title: submission.problem_title,
+            status: 'SCHEDULED_STARTED',
+          }),
+        }],
+      });
+
+      console.log(`Dispatched scheduled submission: ${submission.id}`);
+    }
+  } catch (err) {
+    console.error('Error in scheduled submissions poller:', err);
+  }
+}, 10000); // Check every 10 seconds
 
 app.listen(5003, () => console.log('Submission service on port 5003'));

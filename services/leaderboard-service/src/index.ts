@@ -84,4 +84,31 @@ app.get('/leaderboard/rank/:user_id', async (req: Request, res: Response) => {
   }
 });
 
+// Get contest leaderboard
+app.get('/contests/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit) || 10;
+    const result = await pool.query(`
+      SELECT c.user_id, u.username, MAX(c.score) as top_score 
+      FROM contest_sessions c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.score > 0
+      GROUP BY c.user_id, u.username
+      ORDER BY top_score DESC
+      LIMIT $1
+    `, [limit]);
+    
+    const leaderboard = result.rows.map((r, i) => ({
+      rank: i + 1,
+      user_id: r.user_id,
+      username: r.username,
+      points: r.top_score,
+    }));
+    return res.json(leaderboard);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to fetch contest leaderboard' });
+  }
+});
+
 app.listen(5005, () => console.log('Leaderboard service on port 5005'));

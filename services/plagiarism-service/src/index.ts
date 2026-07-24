@@ -57,8 +57,8 @@ app.post('/check/:submission_id', async (req: Request, res: Response) => {
 
     const othersResult = await pool.query(
       `SELECT id, user_id, code FROM submissions
-       WHERE problem_id = $1 AND id != $2 AND user_id != $3 AND status = 'ACCEPTED'`,
-      [target.problem_id, target.id, target.user_id]
+       WHERE problem_id = $1 AND id != $2 AND status = 'ACCEPTED'`,
+      [target.problem_id, target.id]
     );
 
     const matches = othersResult.rows

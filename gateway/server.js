@@ -73,11 +73,13 @@ const clients = new Map();
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const redisSub = createClient({ url: redisUrl });
 const redisPub = createClient({ url: redisUrl });
+const redisCache = createClient({ url: redisUrl });
 
 async function initRedis() {
   await redisSub.connect();
   await redisPub.connect();
-  console.log('Redis Pub/Sub connected for Gateway');
+  await redisCache.connect();
+  console.log('Redis connected for Gateway');
 
   await redisSub.subscribe('ws-push', (message) => {
     try {
@@ -107,7 +109,39 @@ app.post('/internal/push/:user_id', express.json(), async (req, res) => {
   }
 });
 
-app.use('/auth', createProxyMiddleware({
+// ─── Rate Limiting Middleware ──────────────────────────────────────
+async function loginRateLimiter(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const key = `ratelimit:login:${ip}`;
+  try {
+    const current = await redisCache.incr(key);
+    if (current === 1) await redisCache.expire(key, 60); // 1 minute window
+    if (current > 5) return res.status(429).json({ error: 'Too many login attempts. Try again in a minute.' });
+    next();
+  } catch (err) {
+    next(); // Fail open if Redis has issues
+  }
+}
+
+async function submissionRateLimiter(req, res, next) {
+  if (!req.user || !req.user.id) return next();
+  const key = `ratelimit:submit:${req.user.id}`;
+  try {
+    const current = await redisCache.incr(key);
+    if (current === 1) await redisCache.expire(key, 60); // 1 minute window
+    if (current > 10) return res.status(429).json({ error: 'Too many submissions. Please wait a minute.' });
+    next();
+  } catch (err) {
+    next(); // Fail open if Redis has issues
+  }
+}
+
+app.use('/auth', (req, res, next) => {
+  if (req.path === '/login' && req.method === 'POST') {
+    return loginRateLimiter(req, res, next);
+  }
+  next();
+}, createProxyMiddleware({
   target: 'http://localhost:5001',
   changeOrigin: true,
   pathRewrite: { '^/auth': '' },
@@ -121,7 +155,12 @@ app.use('/stats', authenticate, createProxyMiddleware({
   onError: (_e, _r, res) => res.status(502).json({ error: 'Stats unavailable' }),
 }));
 
-app.use('/submissions', authenticate, createProxyMiddleware({
+app.use('/submissions', authenticate, (req, res, next) => {
+  if (req.method === 'POST') {
+    return submissionRateLimiter(req, res, next);
+  }
+  next();
+}, createProxyMiddleware({
   target: 'http://localhost:5003',
   changeOrigin: true,
   pathRewrite: { '^/submissions': '/submit' },
@@ -139,6 +178,18 @@ app.use('/leaderboard', authenticate, createProxyMiddleware({
   target: 'http://localhost:5005',
   changeOrigin: true,
   onError: (_e, _r, res) => res.status(502).json({ error: 'Leaderboard service unavailable' }),
+}));
+
+app.use('/contests/leaderboard', authenticate, createProxyMiddleware({
+  target: 'http://localhost:5005',
+  changeOrigin: true,
+  onError: (_e, _r, res) => res.status(502).json({ error: 'Leaderboard service unavailable' }),
+}));
+
+app.use('/contests', authenticate, createProxyMiddleware({
+  target: 'http://localhost:5004',
+  changeOrigin: true,
+  onError: (_e, _r, res) => res.status(502).json({ error: 'Problem service unavailable' }),
 }));
 
 app.use('/notifications', authenticate, createProxyMiddleware({

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS problems (
   title       VARCHAR(200) NOT NULL,
   description TEXT         NOT NULL,
   difficulty  VARCHAR(10)  CHECK (difficulty IN ('easy','medium','hard')),
+  topic       VARCHAR(100) DEFAULT 'General',
   created_at  TIMESTAMP    DEFAULT NOW()
 );
 
@@ -22,31 +23,44 @@ CREATE TABLE IF NOT EXISTS test_cases (
 );
 
 CREATE TABLE IF NOT EXISTS submissions (
-  id         SERIAL PRIMARY KEY,
-  user_id    INT  REFERENCES users(id),
-  problem_id INT  REFERENCES problems(id),
-  language   VARCHAR(20) NOT NULL,
-  code       TEXT        NOT NULL,
-  status     VARCHAR(20) DEFAULT 'QUEUED',
-  output     TEXT,
-  created_at TIMESTAMP   DEFAULT NOW()
+  id           SERIAL PRIMARY KEY,
+  user_id      INT  REFERENCES users(id),
+  problem_id   INT  REFERENCES problems(id),
+  language     VARCHAR(20) NOT NULL,
+  code         TEXT        NOT NULL,
+  status       VARCHAR(20) DEFAULT 'QUEUED',
+  output       TEXT,
+  scheduled_at TIMESTAMP   DEFAULT NULL,
+  created_at   TIMESTAMP   DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_submissions_user_problem ON submissions(user_id, problem_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_scheduled ON submissions(status, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_test_cases_problem ON test_cases(problem_id);
 
-INSERT INTO problems (id, title, description, difficulty) VALUES
-(1, 'Sum of Two Numbers', 'Read two space-separated integers from stdin and print their sum.', 'easy'),
-(2, 'Two Sum', 'Given space-separated numbers on line 1 and a target integer on line 2, print the 0-indexed indices of the two numbers that add up to target.', 'easy'),
-(3, 'Palindrome Check', 'Read a single word from stdin. Print true if it reads the same forwards and backwards, else false.', 'easy'),
-(4, 'Reverse String', 'Read a line of text from stdin and print the string in reverse order.', 'easy'),
-(5, 'Fibonacci Number', 'Given an integer N on stdin, print the Nth Fibonacci number (where F(0)=0, F(1)=1, F(2)=1, F(3)=2...).', 'easy'),
-(6, 'Maximum Subarray Sum', 'Given space-separated integers from stdin, find the contiguous subarray with the largest sum and print the sum.', 'medium'),
-(7, 'Valid Parentheses', 'Read a string containing brackets ()[]{} from stdin. Print true if the string is validly balanced, else false.', 'medium'),
-(8, 'Longest Substring Without Repeating Characters', 'Read a string from stdin and print the length of the longest substring without repeating characters.', 'medium'),
-(9, 'Binary Search', 'Read space-separated sorted numbers on line 1 and target integer on line 2. Print 0-indexed position of target, or -1 if not found.', 'medium'),
-(10, 'Merge Intervals', 'Given space-separated integer pairs representing intervals, print the merged overlapping intervals space-separated.', 'hard'),
-(11, 'Trapping Rain Water', 'Given space-separated non-negative integers representing elevation map bars of width 1, print total water trapped.', 'hard')
+CREATE TABLE IF NOT EXISTS contest_sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id),
+  start_time TIMESTAMP DEFAULT NOW(),
+  end_time TIMESTAMP NOT NULL,
+  problem_easy_id INT REFERENCES problems(id),
+  problem_hard_id INT REFERENCES problems(id),
+  score INT DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_contest_sessions_user ON contest_sessions(user_id);
+
+INSERT INTO problems (id, title, description, difficulty, topic) VALUES
+(1, 'Sum of Two Numbers', 'Read two space-separated integers from stdin and print their sum.', 'easy', 'Math'),
+(2, 'Two Sum', 'Given space-separated numbers on line 1 and a target integer on line 2, print the 0-indexed indices of the two numbers that add up to target.', 'easy', 'Arrays'),
+(3, 'Palindrome Check', 'Read a single word from stdin. Print true if it reads the same forwards and backwards, else false.', 'easy', 'Strings'),
+(4, 'Reverse String', 'Read a line of text from stdin and print the string in reverse order.', 'easy', 'Strings'),
+(5, 'Fibonacci Number', 'Given an integer N on stdin, print the Nth Fibonacci number (where F(0)=0, F(1)=1, F(2)=1, F(3)=2...).', 'easy', 'DP'),
+(6, 'Maximum Subarray Sum', 'Given space-separated integers from stdin, find the contiguous subarray with the largest sum and print the sum.', 'medium', 'Arrays'),
+(7, 'Valid Parentheses', 'Read a string containing brackets ()[]{} from stdin. Print true if the string is validly balanced, else false.', 'medium', 'Stacks'),
+(8, 'Longest Substring Without Repeating Characters', 'Read a string from stdin and print the length of the longest substring without repeating characters.', 'medium', 'Sliding Window'),
+(9, 'Binary Search', 'Read space-separated sorted numbers on line 1 and target integer on line 2. Print 0-indexed position of target, or -1 if not found.', 'medium', 'Binary Search'),
+(10, 'Merge Intervals', 'Given space-separated integer pairs representing intervals, print the merged overlapping intervals space-separated.', 'hard', 'Arrays'),
+(11, 'Trapping Rain Water', 'Given space-separated non-negative integers representing elevation map bars of width 1, print total water trapped.', 'hard', 'Two Pointers')
 ON CONFLICT (id) DO NOTHING;
 
 -- Adjust sequence so SERIAL PRIMARY KEY continues from 12

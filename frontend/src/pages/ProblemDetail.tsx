@@ -53,6 +53,7 @@ int main() {
 const DEFAULT_CODE = TEMPLATES.python;
 
 const statusStyles: Record<string, string> = {
+  SCHEDULED:      'text-blue-400 bg-blue-900/40',
   QUEUED:         'text-gray-400 bg-gray-800',
   ACCEPTED:       'text-green-400 bg-green-900/40',
   WRONG_ANSWER:   'text-red-400 bg-red-900/40',
@@ -69,6 +70,7 @@ export default function ProblemDetail() {
   const [problem, setProblem]       = useState<Problem | null>(null);
   const [language, setLanguage]     = useState('python');
   const [code, setCode]             = useState(DEFAULT_CODE);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [verdict, setVerdict]       = useState<{ status: string; output: string } | null>(null);
   const [error, setError]           = useState('');
@@ -117,7 +119,17 @@ export default function ProblemDetail() {
         problem_id: problem.id,
         language,
         code,
+        scheduled_at: scheduledAt || undefined,
       });
+
+      if (data.status === 'SCHEDULED') {
+        setVerdict({ 
+          status: 'SCHEDULED', 
+          output: `Submission scheduled for ${new Date(data.scheduled_at).toLocaleString()}` 
+        });
+        setSubmitting(false);
+        return;
+      }
 
       pendingIdRef.current = data.id;
 
@@ -233,13 +245,24 @@ export default function ProblemDetail() {
             )}
 
             <div className="flex items-center justify-between">
-              <button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-lg transition"
-              >
-                {submitting ? 'Judging...' : 'Submit'}
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-6 py-2 rounded-lg transition"
+                >
+                  {submitting ? 'Judging...' : 'Submit'}
+                </button>
+                <div className="flex flex-col">
+                  <label className="text-xs text-gray-400 mb-1">Schedule (Optional)</label>
+                  <input 
+                    type="datetime-local" 
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="bg-gray-800 text-white border border-gray-700 rounded px-2 py-1 text-xs outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
 
               {verdict && (
                 <span className={`text-sm font-semibold px-3 py-1 rounded ${statusStyles[verdict.status] || 'text-gray-400 bg-gray-800'}`}>

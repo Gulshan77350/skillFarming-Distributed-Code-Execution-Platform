@@ -27,13 +27,20 @@ async function startConsumer() {
         msg = `🎉 Your solution for "${problem_title}" was Accepted!`;
       } else if (status === 'PLAGIARISM_FLAGGED') {
         msg = `🚩 Plagiarism check flagged your submission for "${problem_title}" — ${data.similarity}% similarity to another solution.`;
+      } else if (status === 'SCHEDULED_STARTED') {
+        msg = `⏳ Your scheduled submission for "${problem_title}" has started executing.`;
       } else {
         msg = `❌ Your submission for "${problem_title}" got ${status.replace('_', ' ')}`;
       }
 
+      let type = 'error';
+      if (status === 'ACCEPTED') type = 'success';
+      if (status === 'PLAGIARISM_FLAGGED') type = 'warning';
+      if (status === 'SCHEDULED_STARTED') type = 'info';
+
       const notif = {
         message: msg,
-        type: status === 'ACCEPTED' ? 'success' : status === 'PLAGIARISM_FLAGGED' ? 'warning' : 'error',
+        type: type,
         created_at: new Date().toISOString(),
       };
 

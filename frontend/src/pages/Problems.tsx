@@ -7,6 +7,7 @@ interface Problem {
   id: number;
   title: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  topic: string;
   total_submissions?: number;
   success_rate?: number;
   error_rate?: number;
@@ -24,6 +25,7 @@ export default function Problems() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
+  const [selectedTopic, setSelectedTopic] = useState<string>('All');
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -33,6 +35,9 @@ export default function Problems() {
       .catch(() => setError('Could not load problems. Is the problem service running?'))
       .finally(() => setLoading(false));
   }, []);
+
+  const topics = ['All', ...Array.from(new Set(problems.map(p => p.topic || 'General')))];
+  const filteredProblems = selectedTopic === 'All' ? problems : problems.filter(p => (p.topic || 'General') === selectedTopic);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -58,9 +63,18 @@ export default function Problems() {
             <h2 className="text-3xl font-bold mb-1">Problem Directory</h2>
             <p className="text-gray-400 text-sm">Browse algorithm challenges, inspect error rates, and improve your skill set.</p>
           </div>
-          <Link to="/analytics" className="text-xs bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700 text-blue-300 font-semibold px-3 py-2 rounded-lg transition">
-            📊 View Performance Dashboard →
-          </Link>
+          <div className="flex gap-4">
+            <select 
+              value={selectedTopic}
+              onChange={e => setSelectedTopic(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500"
+            >
+              {topics.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <Link to="/analytics" className="text-xs bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700 text-blue-300 font-semibold px-3 py-2 rounded-lg transition">
+              📊 View Performance Dashboard →
+            </Link>
+          </div>
         </div>
 
         {loading && (
@@ -81,13 +95,14 @@ export default function Problems() {
                   <th className="text-left px-6 py-4">#</th>
                   <th className="text-left px-6 py-4">Title</th>
                   <th className="text-left px-6 py-4">Difficulty</th>
+                  <th className="text-left px-6 py-4">Topic</th>
                   <th className="text-center px-6 py-4">Submissions</th>
                   <th className="text-center px-6 py-4">Success Rate</th>
                   <th className="text-center px-6 py-4">Error Rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
-                {problems.map((p, i) => (
+                {filteredProblems.map((p, i) => (
                   <tr key={p.id}
                     className="hover:bg-gray-800/40 transition cursor-pointer group"
                     onClick={() => navigate(`/problems/${p.id}`)}>
@@ -97,6 +112,9 @@ export default function Problems() {
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-md capitalize ${diffColor[p.difficulty]}`}>
                         {p.difficulty}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-400 text-xs font-semibold">
+                      {p.topic || 'General'}
                     </td>
                     <td className="px-6 py-4 text-center font-mono text-gray-300 text-xs">
                       {p.total_submissions ?? 0}
@@ -109,10 +127,10 @@ export default function Problems() {
                     </td>
                   </tr>
                 ))}
-                {problems.length === 0 && (
+                {filteredProblems.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      No problems registered in database.
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                      No problems found.
                     </td>
                   </tr>
                 )}
