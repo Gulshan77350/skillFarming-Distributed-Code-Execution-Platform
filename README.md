@@ -11,7 +11,7 @@ Recently updated to include **Striver's A-Z DSA Sheet Integration** and a real-t
 Please save your screenshots in a `docs/` folder to view them here:
 
 <div align="center">
-  <img src="./docs/media__1784888869818.png" alt="Platform Screenshot 1" width="45%" />
+  <img src="./docs/Screenshot from 2026-07-24 16-10-55.png" alt="DashBoard" width="45%" />
   <img src="./docs/media__1784888869798.png" alt="Platform Screenshot 2" width="45%" />
   <br/>
   <img src="./docs/media__1784888869789.png" alt="Platform Screenshot 3" width="45%" />
