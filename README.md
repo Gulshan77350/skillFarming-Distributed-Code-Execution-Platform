@@ -1,6 +1,6 @@
 # ⚡ skillFarming: Distributed Code Execution & Virtual Contest Arena
 
-A high-performance, production-ready Distributed Code Judge and Execution Platform built on a containerized microservices architecture. Inspired by platforms like LeetCode and HackerRank, this system is designed to securely, reliably, and asynchronously compile and run user-submitted code in sandboxed environments at scale.Added a new feature called schedule your submit so that user can schedule their code for submission and Random problem generator so user can practice their coding skill along with give contests also.
+A high-performance, production-ready Distributed Code Judge and Execution Platform built on a containerized microservices architecture. Inspired by platforms like LeetCode and HackerRank, this system is designed to securely, reliably, and asynchronously compile and run user-submitted code in sandboxed environments at scale.Added a new feature called schedule your submit so that user can schedule their code for submission and Random problem generator so user can practice their coding skill along with give contests also. The whole system is deployed using AWS EC2.
 
 Recently updated to include **Striver's A-Z DSA Sheet Integration (Not all only few)** and a real-time **Virtual Contest Engine**.
 
@@ -8,8 +8,7 @@ Recently updated to include **Striver's A-Z DSA Sheet Integration (Not all only 
 
 ## 📸 Platform Previews
 
-# Live Link : http://3.25.207.94:5173/
-## Deployed using AWS EC2
+Live Link : http://3.25.207.94:5173/
 
 <div align="center">
   <img src="./docs/Screenshot from 2026-07-24 16-10-55.png" alt="DashBoard" width="45%" />
